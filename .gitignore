@@ -29,6 +29,7 @@ go.work.sum
 .history/
 .lh
 .idea/
+*.db
 *.log
 bin/
 testdata/

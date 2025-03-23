@@ -15,26 +15,27 @@
 package paginate
 
 import (
+	"fmt"
+	"math"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
-// parsePagination parse page and size from url.Values
-func parsePagination(query url.Values) Pagination {
-	page, _ := strconv.Atoi(query.Get("page"))
-	if page < 1 {
-		page = 1
-	}
-	size, _ := strconv.Atoi(query.Get("size"))
-	if size < 1 || size > 2000 {
-		size = 10
-	}
-	return Pagination{Page: page, Size: size}
+// Paginate GORM paginated Response
+type Pagination struct {
+	QueryParams
+	Items      any   `json:"items"`
+	Total      int64 `json:"total"`       // total items
+	TotalPages int64 `json:"total_pages"` // total pages
 }
 
 // parseOrderBy parse order by
-func parseOrderBy(orderBy string, validFields map[string]bool) (orders []OrderBy) {
+func (p *Pagination) parseOrderBy(orderBy string, validFields map[string]bool) (orders []OrderBy) {
 	parts := strings.Split(orderBy, ",")
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
@@ -62,7 +63,7 @@ func parseOrderBy(orderBy string, validFields map[string]bool) (orders []OrderBy
 }
 
 // parseWhere parse where
-func parseWhere(query url.Values, validFields map[string]bool) []Where {
+func (p *Pagination) parseWhere(query url.Values, validFields map[string]bool) []Where {
 	var filters []Where
 	operatorMap := map[string]string{
 		"eq":      "=",
@@ -117,4 +118,100 @@ func parseWhere(query url.Values, validFields map[string]bool) []Where {
 		})
 	}
 	return filters
+}
+
+// Parse parse all to QueryParams
+func (p *Pagination) Parse(query url.Values, validFields map[string]bool) {
+	page, _ := strconv.Atoi(query.Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	p.Page = page
+
+	size, _ := strconv.Atoi(query.Get("size"))
+	if size < 1 || size > 2000 {
+		size = 10
+	}
+	p.Size = size
+
+	p.QueryParams.Wheres = p.parseWhere(query, validFields)
+	p.QueryParams.OrderBys = p.parseOrderBy(query.Get("order_by"), validFields)
+}
+
+// ParseModelFields parse gorm model fields name from struct
+func ParseModelFields(model any) ([]string, error) {
+	sch, err := schema.Parse(model, &sync.Map{}, schema.NamingStrategy{})
+	if err != nil {
+		return nil, err
+	}
+	fields := make([]string, 0)
+	for _, field := range sch.Fields {
+		fields = append(fields, field.DBName)
+	}
+	return fields, nil
+}
+
+// applyOffsetAndLimit apply offset and limit to *gorm.DB
+func applyOffsetAndLimit(db *gorm.DB, pagination *Pagination) *gorm.DB {
+	offset := (pagination.Page - 1) * pagination.Size
+	return db.Offset(offset).Limit(pagination.Size)
+}
+
+// applyOrderBy apply OrderBy to *gorm.DB
+func applyOrderBy(db *gorm.DB, orders []OrderBy) *gorm.DB {
+	for _, order := range orders {
+		db = db.Order(fmt.Sprintf("%s %s", order.Field, order.Direction))
+	}
+	return db
+}
+
+// applyWhere apply Where to *gorm.DB
+func applyWhere(db *gorm.DB, filters []Where) *gorm.DB {
+	operatorMap := map[string]string{
+		"eq":       "= ?",
+		"ne":       "!= ?",
+		"gt":       "> ?",
+		"gte":      ">= ?",
+		"lt":       "< ?",
+		"lte":      "<= ?",
+		"like":     "LIKE ?",
+		"not like": "NOT LIKE ?",
+		"is":       "is ?",
+		"is not":   "is not ?",
+		"in":       "IN (?)",
+	}
+
+	for _, filter := range filters {
+		sqlOp := operatorMap[filter.Operator]
+		query := fmt.Sprintf("%s %s", filter.Field, sqlOp)
+		db = db.Where(query, filter.Value)
+	}
+	return db
+}
+
+// Paginate use gorm [scopes](https://gorm.io/docs/scopes.html#Pagination) to apply query params
+//
+// Usage:
+//
+//	db.Scopes(Paginate(model, query, paginate)).Find(&users)
+func Paginate(model any, query url.Values, pagination *Pagination, tx2 *gorm.DB) func(db *gorm.DB) *gorm.DB {
+	// tx2 fix: sql: expected 8 destination arguments in Scan, not 1; sql: ...
+	return func(tx *gorm.DB) *gorm.DB {
+		fields, _ := ParseModelFields(model)
+		validFields := make(map[string]bool, len(fields))
+		for _, field := range fields {
+			validFields[field] = true
+		}
+
+		pagination.Parse(query, validFields)
+		var totalRows int64
+		tx2.Model(model).Count(&totalRows)
+		pagination.Total = totalRows
+		pagination.TotalPages = int64(math.Ceil(float64(totalRows) / float64(pagination.QueryParams.Size)))
+
+		tx = applyWhere(tx, pagination.QueryParams.Wheres)
+		tx = applyOffsetAndLimit(tx, pagination)
+		tx = applyOrderBy(tx, pagination.QueryParams.OrderBys)
+		return tx
+	}
 }

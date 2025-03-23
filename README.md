@@ -1,6 +1,10 @@
 # gorm-paginate
 
-[GORM]（https://gorm.io/） 分页插件（[program implementation for]（https://github.com/xiexianbin/gin-template/commit/926b25832fefe611dcd119b6cd46cbd80806c386））
+[![Go Report Card](https://goreportcard.com/badge/go.xiexianbin.cn/gorm-paginate)](https://goreportcard.com/report/go.xiexianbin.cn/gorm-paginate)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Go.Dev reference](https://pkg.go.dev/badge/github.com/xiexianbin/gorm-paginate?utm_source=godoc)](https://pkg.go.dev/go.xiexianbin.cn/gorm-paginate)
+
+[GORM](https://gorm.io/)分页插件（[program implementation for](https://github.com/xiexianbin/gin-template/commit/926b25832fefe611dcd119b6cd46cbd80806c386))
 
 ## 特性
 

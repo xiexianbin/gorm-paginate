@@ -14,12 +14,6 @@
 
 package paginate
 
-// Pagination paging params, transform to SQL `limit` and `offset`
-type Pagination struct {
-	Page int `json:"page"`
-	Size int `json:"size"`
-}
-
 // Where transform to SQL `Where` Condition
 type Where struct {
 	Field    string `json:"field"`
@@ -35,10 +29,11 @@ type OrderBy struct {
 	Direction string `json:"direction"` // asc, desc
 }
 
-// QueryParams Filter + Order + Pagination
+// QueryParams Where + OrderBy + Pagination
 type QueryParams struct {
-	Pagination
-	OrderBy  []string       `json:"orderBy"`
-	Where    map[string]any `json:"where"`
-	Comments []string       `json:"comments"` // when some condition not workk, comment it
+	Page     int       `json:"page"` // page and size params, transform to SQL `limit` and `offset`
+	Size     int       `json:"size"`
+	OrderBys []OrderBy `json:"order_bys"`
+	Wheres   []Where   `json:"wheres"`
+	Comments []string  `json:"comments"` // when some condition not workk, comment it
 }

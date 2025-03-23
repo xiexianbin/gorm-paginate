@@ -1,0 +1,10 @@
+## gin-demo
+
+### create users
+POST http://localhost:8080/users HTTP/1.1
+
+### get users demo-1
+GET http://localhost:8080/users?size=10&page=1&order_by=-name,id
+
+### get users demo-2
+GET http://localhost:8080/users?size=10&page=1&age_gt=16&name_like=e%&balance_between=20,250&account_manager_in=zhangsi,lisi
